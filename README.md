@@ -12,6 +12,8 @@ MessageCipherWeb
  messagecipherwebui
  
   -Vue.js project for Web UI
+  
+  -NOTE: remember to modify the axios URL before you deploy to server, the axios URL is located at file: main.js
  
 本程序是Web版本的MessageCipher，可脱离TLS进行安全传输，服务器不储存任何信息
 
