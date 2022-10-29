@@ -19,7 +19,6 @@ import org.apache.tomcat.jakartaee.commons.io.IOUtils;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 
-import in.chenxi.requestParams;
 
 /**
  * Servlet implementation class MessageCipher
@@ -32,7 +31,7 @@ public class MessageCipher extends HttpServlet {
 	private final String FACTAL_ERROR_CODE = "5001";
 	private final boolean DEBUG = false;
 	
-	private final String groupAesKey = "1234567890ABCDEF!@#$%^&*()abcdef"; // modify this before you deploy it to the server
+	private final String groupAesKey = "%9YZmT~l;a(VgAbtEJRB,At?}n/vq3pU"; // modify this before you deploy it to the server
        
     /**
      * @see HttpServlet#HttpServlet()
@@ -335,8 +334,18 @@ public class MessageCipher extends HttpServlet {
         			messageAesKey =R.getMessageAesKey();
         			encryptedText = R.getCryptedText();
         			clientRsaPublicKey = R.getClientRsaPublicKey();
+        			protectionAesKey = R.getProtectionAesKey();
         			
-        			messageAesKey = frontEndCrypto.decryptByPrivateKey(messageAesKey, frontEndCrypto.SERVER_RSA_PRIVATE_KEY); // 服务器私钥解密通讯密码
+        			if(this.isValueEmptyOrNull(messageAesKey)) { this.deliverResponse(response, "通讯密码不能为空", this.GENERAL_ERROR_CODE, ""); return; }
+        			if(this.isValueEmptyOrNull(encryptedText)) { this.deliverResponse(response, "通讯密文不能为空", this.GENERAL_ERROR_CODE, ""); return; }
+        			if(this.isValueEmptyOrNull(clientRsaPublicKey)) { this.deliverResponse(response, "需要浏览器端RSA公钥", this.GENERAL_ERROR_CODE, ""); return; }
+        			if(this.isValueEmptyOrNull(protectionAesKey)) { this.deliverResponse(response, "保护密码不能为空", this.GENERAL_ERROR_CODE, ""); return; }
+        			
+        			protectionAesKey = frontEndCrypto.decryptByPrivateKey(protectionAesKey, frontEndCrypto.SERVER_RSA_PRIVATE_KEY); // 服务器私钥解密保护密码
+        			if(this.isValueEmptyOrNull(protectionAesKey)) { this.deliverResponse(response, "服务器无法解密保护密码", this.GENERAL_ERROR_CODE, ""); return; }
+        			
+        			messageAesKey = frontEndCrypto.aesDecrypt(protectionAesKey, protectionAesKey, messageAesKey); // 保护密码解密通讯密码
+        			if(this.isValueEmptyOrNull(messageAesKey)) { this.deliverResponse(response, "浏览器无法解密通讯密码", this.GENERAL_ERROR_CODE, ""); return; }
         			
         			if(this.DEBUG) {
         				System.out.println("使用服务器私钥解密后的通讯密码 :: " + messageAesKey);
@@ -347,11 +356,9 @@ public class MessageCipher extends HttpServlet {
         			
         			aesKeyLength = messageAesKey.length();
         			if(aesKeyLength != 16 && aesKeyLength != 24 && aesKeyLength != 32) { this.deliverResponse(response, "通讯密码应为16/24/32字符长度", this.GENERAL_ERROR_CODE, ""); return; }
-        			if(this.isValueEmptyOrNull(encryptedText)) { this.deliverResponse(response, "通讯密文不能为空", this.GENERAL_ERROR_CODE, ""); return; }
-        			if(this.isValueEmptyOrNull(clientRsaPublicKey)) { this.deliverResponse(response, "浏览器RSA公钥不能为空", this.GENERAL_ERROR_CODE, ""); return; }
         			
         			plainText = C.decrypt(messageAesKey, encryptedText);
-        			if (this.isValueEmptyOrNull(plainText)){ this.deliverResponse(response, "服务器解密通讯明文时出错", this.GENERAL_ERROR_CODE, ""); return; }
+        			if (this.isValueEmptyOrNull(plainText)){ this.deliverResponse(response, "服务器解密通讯密文时出错", this.GENERAL_ERROR_CODE, ""); return; }
         			
         			protectionAesKey = C.createRandom(false, 32); // 生成保护密码，加密得到的通讯明文
         			plainText = frontEndCrypto.aesEncrypt(protectionAesKey, protectionAesKey, plainText);
