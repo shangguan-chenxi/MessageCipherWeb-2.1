@@ -746,11 +746,14 @@ export default {
             clientRsaPublicKey: this.clientRSAPubKey
           }
         } else {
-          var serverPubKeyCryptedMessageAesKey = this.encryptByRsaPublicKey(this.serverRSAPubKey, this.requestData.messageAesKey) // 用服务器公钥加密通讯密码
+          var protectionAesKey = this.creatRandomString(false, 32)
+          var cryptedMessageAesKey = this.encryptByAesKey(protectionAesKey, protectionAesKey, this.requestData.messageAesKey) // 用保护密码加密通讯密码
+          protectionAesKey = this.encryptByRsaPublicKey(this.serverRSAPubKey, protectionAesKey) // 用服务器公钥加密保护密码
           dataPack = {
             method: '6',
-            messageAesKey: serverPubKeyCryptedMessageAesKey,
+            messageAesKey: cryptedMessageAesKey,
             cryptedText: this.requestData.cryptedText,
+            protectionAesKey: protectionAesKey,
             clientRsaPublicKey: this.clientRSAPubKey
           }
         }
