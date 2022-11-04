@@ -52,6 +52,7 @@
 
                     <el-row class="smallCard">
                         <span class="subTitleText" style="margin-bottom: 17px;">通讯密码</span>
+                        <el-button type="primary" size="mini" round style="margin-top: -5px;" @click="getServerRsaPubKey()">更新公钥</el-button>
                         <el-switch
                           style="display: block; float: right;"
                           v-model="groupMode"
@@ -102,7 +103,8 @@
 
         <!-- 底部文字 -->
         <el-col :xs="24" :sm="24" :md="24" :lg="24" :xl="24">
-            <p>Powered By: <a href="https://chenxi.in/" target="_blank">Chenxi · 晨曦</a> | <el-button type="text" @click="disclaimerShow = true;">Disclaimer · 声明</el-button> | 此版本和V2.01版本的通讯编码互通</p>
+          <el-link v-if="strictMode" type="success">当前服务器设置为：STRICT 模式</el-link>
+          <p>Powered By: <a href="https://chenxi.in/" target="_blank">Chenxi · 晨曦</a> | <el-button type="text" @click="disclaimerShow = true;">Disclaimer · 声明</el-button> | 此版本和V2.01版本的通讯编码互通</p>
         </el-col>
     </el-row>
 
@@ -156,6 +158,29 @@
       </el-row>
       <span slot="footer" class="dialog-footer">
         <el-button @click="addContactDialogShow = false; contactName = ''; contactPassword = '';">关 闭</el-button>
+      </span>
+    </el-dialog>
+
+    <el-dialog
+      title="需要凭据"
+      :visible.sync="strictModeAuthDialogShow"
+      width="30%">
+
+      <span>
+        <el-row>
+          <el-col>
+            <el-row>当前服务器设置为STRICT模式，需要验证凭据</el-row>
+            <el-row>
+              <el-input placeholder="凭据 16/24/32位长度" type="password" maxlength="32" clearable v-model="authPassword" style="margin-top: 10px;"></el-input>
+              <el-input placeholder="如验证通过则应显示6位数字" type="text" disabled v-model="authCheckCode" style="margin-top: 5px;"></el-input>
+            </el-row>
+          </el-col>
+        </el-row>
+      </span>
+
+      <span slot="footer" class="dialog-footer">
+        <el-button type="primary" @click="checkAuthPassword()" :disabled="authCheckCode != ''">验证</el-button>
+        <el-button type="success" @click="decryptServerPublicKey()" :disabled="authCheckCode ==''">保存</el-button>
       </span>
     </el-dialog>
 
@@ -215,10 +240,18 @@ export default {
       editContactName: '',
       editContactPwd: '',
       encryptor: new JSEncrypt({ default_key_size: 1024 }),
+      localProtectionAesKey: '',
       clientRSAPubKey: '',
       clientRSAPriKey: '',
       serverRSAPubKey: '',
-      clientAesIV: ''
+
+      /** 严格模式 */
+      encryptedServerRSAPubKey: '',
+      encryptedAuthCheckCode: '',
+      authCheckCode: '',
+      authPassword: '',
+      strictModeAuthDialogShow: false,
+      strictMode: false
     }
   },
   methods: {
@@ -364,6 +397,39 @@ export default {
       // return Buffer.from(decrypted.toString().slice(2), 'hex').toString('utf8')
     },
 
+    checkAesKeyLength (str) {
+      return (str.length === 16 || str.length === 24 || str.length === 32)
+    },
+
+    async checkAuthPassword () {
+      if (!this.checkAesKeyLength(this.authPassword)) {
+        await this.$message({ message: '凭据应为16/24/32位长度' })
+        return
+      }
+      this.authCheckCode = this.decryptByAesKey(this.authPassword, this.authPassword, this.encryptedAuthCheckCode)
+      if (this.authCheckCode !== '') {
+        await this.$message({ message: '验证通过，请保存' })
+        // this.decryptServerPublicKey()
+      } else {
+        await this.$message({ message: '无效的凭据' })
+      }
+    },
+    async decryptServerPublicKey () {
+      this.serverRSAPubKey = this.decryptByAesKey(this.authPassword, this.authPassword, this.encryptedServerRSAPubKey)
+      if (this.serverRSAPubKey === '') {
+        await this.$message({ message: '解密服务器公钥失败' })
+      } else {
+        await this.$message({ message: '已保存服务器公钥到浏览器' })
+        this.strictModeAuthDialogShow = false
+        this.authPassword = ''
+      }
+      this.authCheckCode = ''
+
+      if (this.CONST_DEBUG) {
+        console.log('解密服务器RSA公钥 :: this.serverRSAPubKey => ', this.serverRSAPubKey)
+      }
+    },
+
     /**
      * 编码解决方案
      */
@@ -490,13 +556,31 @@ export default {
     /** 运行于服务器的函数 */
     // 0：加载的时候要运行的
     getServerRsaPubKey () {
+      this.serverRSAPubKey = ''
+      this.authPassword = ''
+      this.authCheckCode = ''
       var dataPack = {
         method: '0'
       }
       this.$axios.post('', dataPack).then((res) => {
         if (res.data.code === '200') {
-          this.serverRSAPubKey = res.data.serverRsaPublicKey
+          if (res.data.strictMode === 'true') {
+            this.encryptedServerRSAPubKey = res.data.result
+            this.encryptedAuthCheckCode = res.data.authCheckCode
+            this.strictModeAuthDialogShow = true
+            this.strictMode = true
+          } else {
+            this.strictMode = false
+            this.serverRSAPubKey = res.data.result
+            if (this.serverRSAPubKey !== '') {
+              this.$message({ message: '成功获取服务器公钥' })
+            } else {
+              this.$message({ message: '获取服务器公钥失败' })
+            }
+          }
           if (this.CONST_DEBUG) {
+            console.log('获取服务器RSA公钥 :: res.data => ', res.data)
+            console.log('获取服务器RSA公钥 :: this.strictModeAuthDialogShow => ', this.strictModeAuthDialogShow)
             console.log('获取服务器RSA公钥 :: this.serverRSAPubKey => ', this.serverRSAPubKey)
           }
         } else {
@@ -504,40 +588,47 @@ export default {
         }
       })
     },
+
     // 1
     generateRsaKeyPair () {
       if (this.CONST_DEBUG) { console.log('获取RSA密钥对') }
+      if (this.serverRSAPubKey === '') {
+        this.$message({ message: '无服务器公钥，不能进行操作' })
+        return
+      }
+      this.protectionAesKey = this.creatRandomString(false, 32)
+      var encryptedProtectionAesKey = this.encryptByRsaPublicKey(this.serverRSAPubKey, this.protectionAesKey)
       var dataPack = {
         method: '1',
-        clientRsaPublicKey: this.clientRSAPubKey
+        protectionAesKey: encryptedProtectionAesKey
       }
       this.$axios.post('', dataPack).then((res) => {
         if (this.CONST_DEBUG) {
           console.log('生成密钥对 :: 数据包 -> ', res.data)
         }
         if (res.data.code === '200') {
-          this.serverRSAPubKey = res.data.serverRsaPublicKey
-
           var publicKey = res.data.publicKey
           var privateKey = res.data.privateKey
-          var protectionAesKey = res.data.protectionAesKey
-
-          protectionAesKey = this.decryptByRsaPrivateKey(this.clientRSAPriKey, protectionAesKey)
-          privateKey = this.decryptByAesKey(protectionAesKey, protectionAesKey, privateKey)
-
-          if (this.CONST_DEBUG) {
-            console.log('保护性AES密码 -> ', protectionAesKey)
+          this.requestData.yourRsaPubKey = this.decryptByAesKey(this.protectionAesKey, this.protectionAesKey, publicKey)
+          this.requestData.yourRsaPriKey = this.decryptByAesKey(this.protectionAesKey, this.protectionAesKey, privateKey)
+          if (this.requestData.yourRsaPubKey !== '' && this.requestData.yourRsaPriKey !== '') {
+            this.$message({ message: '成功获取密钥对' })
+          } else {
+            this.$message({ message: '生成RSA密钥对：前端解密数据失败' })
           }
-
-          this.requestData.yourRsaPubKey = publicKey
-          this.requestData.yourRsaPriKey = privateKey
-        } else {}
+        } else {
+          this.$message({ message: '错误信息: ' + res.data.result + ' | 错误码: ' + res.data.code })
+        }
       })
     },
 
     // 2 生成通讯密码交换密文
     async generateCryptedMessageAesKey () {
       if (this.CONST_DEBUG) { console.log('生成通讯密码密文') }
+      if (this.serverRSAPubKey === '') {
+        this.$message({ message: '无服务器公钥，不能进行操作' })
+        return
+      }
       var pass = true
       if (this.requestData.yourRsaPubKey === '') {
         await this.$message({ message: '己方RSA公钥不能为空' })
@@ -555,30 +646,35 @@ export default {
         await this.$message({ message: '通讯密码不能为空' })
         pass = false
       } else {
-        if (this.requestData.messageAesKey.length !== 16 && this.requestData.messageAesKey.length !== 24 && this.requestData.messageAesKey.length !== 32) {
+        if (!this.checkAesKeyLength(this.requestData.messageAesKey)) {
           await this.$message({ message: '通讯密码的长度应为16/24/32位' })
           pass = false
         }
       }
 
       if (pass) {
-        var protectionAesKey = this.creatRandomString(false, 32)
-        var encryptedPrivateKey = this.encryptByAesKey(protectionAesKey, protectionAesKey, this.requestData.yourRsaPriKey)
-        var protectedMessageAesKey = this.encryptByAesKey(protectionAesKey, protectionAesKey, this.requestData.messageAesKey)
-        var encryptedProtectionAesKey = this.encryptByRsaPublicKey(this.serverRSAPubKey, protectionAesKey)
+        this.protectionAesKey = this.creatRandomString(false, 32)
+        var encryptedPubliceKey = this.encryptByAesKey(this.protectionAesKey, this.protectionAesKey, this.requestData.yourRsaPubKey)
+        var encryptedPrivateKey = this.encryptByAesKey(this.protectionAesKey, this.protectionAesKey, this.requestData.yourRsaPriKey)
+        var encryptedItsPubKey = this.encryptByAesKey(this.protectionAesKey, this.protectionAesKey, this.requestData.itsRsaPubKey)
+        var encryptedMessageAesKey = this.encryptByAesKey(this.protectionAesKey, this.protectionAesKey, this.requestData.messageAesKey)
+        var encryptedProtectionAesKey = this.encryptByRsaPublicKey(this.serverRSAPubKey, this.protectionAesKey)
         var dataPack = {
           method: '2',
-          yourRSAPubKey: this.requestData.yourRsaPubKey,
-          yourRSAPriKey: encryptedPrivateKey, // 已用保护性AES密码加密
-          itsRSAPubKey: this.requestData.itsRsaPubKey,
-          messageAesKey: protectedMessageAesKey, // 用保护密码解密
-          protectionAesKey: encryptedProtectionAesKey // 用服务器私钥解密
+          yourRSAPubKey: encryptedPubliceKey,
+          yourRSAPriKey: encryptedPrivateKey,
+          itsRSAPubKey: encryptedItsPubKey,
+          messageAesKey: encryptedMessageAesKey,
+          protectionAesKey: encryptedProtectionAesKey // 用服务器私钥加密
         }
         await this.$axios.post('', dataPack).then((res) => {
           if (res.data.code === '200') {
-            this.serverRSAPubKey = res.data.serverRsaPublicKey
-            this.requestData.cryptedMessageAesKey = res.data.result
-            this.$message({ message: '成功取得通讯密码密文' })
+            this.requestData.cryptedMessageAesKey = this.decryptByAesKey(this.protectionAesKey, this.protectionAesKey, res.data.result)
+            if (this.requestData.cryptedMessageAesKey !== '') {
+              this.$message({ message: '成功取得通讯密码密文' })
+            } else {
+              this.$message({ message: '生成通讯密码密文：前端解密数据失败' })
+            }
           } else {
             this.$message({ message: '错误信息: ' + res.data.result + ' | 错误码: ' + res.data.code })
           }
@@ -589,6 +685,10 @@ export default {
     // 3 解密通讯密码交换密文
     async decryptCryptedMessageAesKey () {
       if (this.CONST_DEBUG) { console.log('解密通讯密码密文') }
+      if (this.serverRSAPubKey === '') {
+        this.$message({ message: '无服务器公钥，不能进行操作' })
+        return
+      }
       var pass = true
       if (this.requestData.yourRsaPubKey === '') {
         await this.$message({ message: '己方RSA公钥不能为空' })
@@ -608,25 +708,28 @@ export default {
       }
 
       if (pass) {
-        var protectionAesKey = this.creatRandomString(false, 32)
-        var encryptedPrivateKey = this.encryptByAesKey(protectionAesKey, protectionAesKey, this.requestData.yourRsaPriKey)
-        protectionAesKey = this.encryptByRsaPublicKey(this.serverRSAPubKey, protectionAesKey)
+        this.protectionAesKey = this.creatRandomString(false, 32)
+        var encryptedPubliceKey = this.encryptByAesKey(this.protectionAesKey, this.protectionAesKey, this.requestData.yourRsaPubKey)
+        var encryptedPrivateKey = this.encryptByAesKey(this.protectionAesKey, this.protectionAesKey, this.requestData.yourRsaPriKey)
+        var encryptedItsPubKey = this.encryptByAesKey(this.protectionAesKey, this.protectionAesKey, this.requestData.itsRsaPubKey)
+        var cryptedMessageAesKey = this.encryptByAesKey(this.protectionAesKey, this.protectionAesKey, this.requestData.cryptedMessageAesKey)
+        var encryptedProtectionAesKey = this.encryptByRsaPublicKey(this.serverRSAPubKey, this.protectionAesKey)
         var dataPack = {
           method: '3',
-          yourRSAPubKey: this.requestData.yourRsaPubKey,
+          yourRSAPubKey: encryptedPubliceKey,
           yourRSAPriKey: encryptedPrivateKey,
-          itsRSAPubKey: this.requestData.itsRsaPubKey,
-          cryptedMessageAesKey: this.requestData.cryptedMessageAesKey,
-          protectionAesKey: protectionAesKey,
-          clientRsaPublicKey: this.clientRSAPubKey
+          itsRSAPubKey: encryptedItsPubKey,
+          cryptedMessageAesKey: cryptedMessageAesKey,
+          protectionAesKey: encryptedProtectionAesKey
         }
         this.$axios.post('', dataPack).then((res) => {
           if (res.data.code === '200') {
-            this.serverRSAPubKey = res.data.serverRsaPublicKey
-            var encryptedMessageAesKey = res.data.result
-            protectionAesKey = this.decryptByRsaPrivateKey(this.clientRSAPriKey, res.data.protectionAesKey)
-            this.requestData.messageAesKey = this.decryptByAesKey(protectionAesKey, protectionAesKey, encryptedMessageAesKey)
-            this.$message({ message: '成功取得通讯密码' })
+            this.requestData.messageAesKey = this.decryptByAesKey(this.protectionAesKey, this.protectionAesKey, res.data.result)
+            if (this.requestData.messageAesKey !== '') {
+              this.$message({ message: '成功取得通讯密码' })
+            } else {
+              this.$message({ message: '解密通讯密码密文：前端解密数据失败' })
+            }
           } else {
             this.$message({ message: '错误信息: ' + res.data.result + ' | 错误码: ' + res.data.code })
           }
@@ -661,13 +764,17 @@ export default {
     // 5 / 7： 通讯明文加密
     async encryptPlainText () {
       if (this.CONST_DEBUG) { console.log('使用通讯密码加密通讯明文') }
+      if (this.serverRSAPubKey === '') {
+        this.$message({ message: '无服务器公钥，不能进行操作' })
+        return
+      }
       var pass = true
       if (!this.groupMode) {
         if (this.requestData.messageAesKey === '') {
           await this.$message({ message: '通讯密码不能为空' })
           pass = false
         } else {
-          if (this.requestData.messageAesKey.length !== 16 && this.requestData.messageAesKey.length !== 24 && this.requestData.messageAesKey.length !== 32) {
+          if (!this.checkAesKeyLength(this.requestData.messageAesKey)) {
             await this.$message({ message: '通讯密码的长度应为16/24/32位' })
             pass = false
           }
@@ -679,37 +786,42 @@ export default {
       }
 
       if (pass) {
-        var protectionAesKey = this.creatRandomString(false, 32) // 生成保护密码
-        var plainText = this.encryptByAesKey(protectionAesKey, protectionAesKey, this.requestData.plainText) // 用保护密码加密通讯明文
+        this.protectionAesKey = this.creatRandomString(false, 32) // 生成保护密码
+        var plainText = this.encryptByAesKey(this.protectionAesKey, this.protectionAesKey, this.requestData.plainText) // 用保护密码加密通讯明文
+        let encryptedProtectionAesKey = ''
         var dataPack = {}
+
         if (this.groupMode) {
-          protectionAesKey = this.encryptByRsaPublicKey(this.serverRSAPubKey, protectionAesKey) // 用服务器公钥加密保护密码
+          encryptedProtectionAesKey = this.encryptByRsaPublicKey(this.serverRSAPubKey, this.protectionAesKey) // 用服务器公钥加密保护密码
           dataPack = {
             method: '7',
             plainText: plainText,
-            protectionAesKey: protectionAesKey
+            protectionAesKey: encryptedProtectionAesKey
           }
         } else {
-          var protectedMessageAesKey = this.encryptByAesKey(protectionAesKey, protectionAesKey, this.requestData.messageAesKey) // 用保护密码加密通讯密码
-          protectionAesKey = this.encryptByRsaPublicKey(this.serverRSAPubKey, protectionAesKey) // 用服务器公钥加密保护密码
+          var encryptedMessageAesKey = this.encryptByAesKey(this.protectionAesKey, this.protectionAesKey, this.requestData.messageAesKey) // 用保护密码加密通讯密码
+          encryptedProtectionAesKey = this.encryptByRsaPublicKey(this.serverRSAPubKey, this.protectionAesKey) // 用服务器公钥加密保护密码
           if (this.CONST_DEBUG) {
-            console.log('使用保护密码加密通讯密码的结果 :: protectedMessageAesKey => ', protectedMessageAesKey) // 用保护密码加密的通讯密码
-            console.log('AES保护密码 ::  => ', protectionAesKey)
+            console.log('使用保护密码加密通讯密码的结果 :: protectedMessageAesKey => ', encryptedMessageAesKey)
+            console.log('AES保护密码 ::  => ', this.protectionAesKey)
             console.log('使用AES保护密码加密通讯明文的结果 :: plainText => ', plainText)
           }
           dataPack = {
             method: '5',
-            messageAesKey: protectedMessageAesKey,
+            messageAesKey: encryptedMessageAesKey,
             plainText: plainText,
-            protectionAesKey: protectionAesKey
+            protectionAesKey: encryptedProtectionAesKey
           }
         }
         this.$axios.post('', dataPack).then((res) => {
           if (res.data.code === '200') {
-            this.serverRSAPubKey = res.data.serverRsaPublicKey
-            this.requestData.cryptedText = res.data.result
-            this.requestData.plainText = ''
-            this.$message({ message: '消息加密成功' })
+            this.requestData.cryptedText = this.decryptByAesKey(this.protectionAesKey, this.protectionAesKey, res.data.result)
+            if (this.requestData.cryptedText !== '') {
+              this.requestData.plainText = ''
+              this.$message({ message: '消息加密成功' })
+            } else {
+              this.$message({ message: '加密通讯明文：前端解密数据失败' })
+            }
           } else {
             this.$message({ message: '错误信息: ' + res.data.result + ' | 错误码: ' + res.data.code })
           }
@@ -720,13 +832,17 @@ export default {
     // 6 / 8：通讯密文解密
     async decryptCryptedText () {
       if (this.CONST_DEBUG) { console.log('使用通讯密码解密通讯密文') }
+      if (this.serverRSAPubKey === '') {
+        this.$message({ message: '无服务器公钥，不能进行操作' })
+        return
+      }
       var pass = true
       if (!this.groupMode) {
         if (this.requestData.messageAesKey === '') {
           await this.$message({ message: '通讯密码不能为空' })
           pass = false
         } else {
-          if (this.requestData.messageAesKey.length !== 16 && this.requestData.messageAesKey.length !== 24 && this.requestData.messageAesKey.length !== 32) {
+          if (!this.checkAesKeyLength(this.requestData.messageAesKey)) {
             await this.$message({ message: '通讯密码的长度应为16/24/32位' })
             pass = false
           }
@@ -738,39 +854,37 @@ export default {
       }
 
       if (pass) {
+        this.protectionAesKey = this.creatRandomString(false, 32) // 生成保护密码
+        var cryptedText = this.encryptByAesKey(this.protectionAesKey, this.protectionAesKey, this.requestData.cryptedText) // 用保护密码加密通讯密文
+        let encryptedProtectionAesKey = ''
         var dataPack = {}
+
         if (this.groupMode) {
+          encryptedProtectionAesKey = this.encryptByRsaPublicKey(this.serverRSAPubKey, this.protectionAesKey) // 用服务器公钥加密保护密码
           dataPack = {
             method: '8',
-            cryptedText: this.requestData.cryptedText,
-            clientRsaPublicKey: this.clientRSAPubKey
+            cryptedText: cryptedText,
+            protectionAesKey: encryptedProtectionAesKey
           }
         } else {
-          var protectionAesKey = this.creatRandomString(false, 32)
-          var cryptedMessageAesKey = this.encryptByAesKey(protectionAesKey, protectionAesKey, this.requestData.messageAesKey) // 用保护密码加密通讯密码
-          protectionAesKey = this.encryptByRsaPublicKey(this.serverRSAPubKey, protectionAesKey) // 用服务器公钥加密保护密码
+          var encryptedMessageAesKey = this.encryptByAesKey(this.protectionAesKey, this.protectionAesKey, this.requestData.messageAesKey) // 用保护密码加密通讯密码
+          encryptedProtectionAesKey = this.encryptByRsaPublicKey(this.serverRSAPubKey, this.protectionAesKey) // 用服务器公钥加密保护密码
           dataPack = {
             method: '6',
-            messageAesKey: cryptedMessageAesKey,
-            cryptedText: this.requestData.cryptedText,
-            protectionAesKey: protectionAesKey,
-            clientRsaPublicKey: this.clientRSAPubKey
+            messageAesKey: encryptedMessageAesKey,
+            cryptedText: cryptedText,
+            protectionAesKey: encryptedProtectionAesKey
           }
         }
 
         this.$axios.post('', dataPack).then((res) => {
           if (res.data.code === '200') {
-            this.serverRSAPubKey = res.data.serverRsaPublicKey
-            var protectionAesKey = res.data.protectionAesKey
-            var plainText = res.data.result
-
-            protectionAesKey = this.decryptByRsaPrivateKey(this.clientRSAPriKey, protectionAesKey)
-            plainText = this.decryptByAesKey(protectionAesKey, protectionAesKey, plainText)
-
-            this.requestData.plainText = plainText
-            this.$message({ message: '消息解密成功' })
-            if (this.CONST_DEBUG) {
-              console.log('解密后的密文 => ', plainText)
+            this.requestData.plainText = this.decryptByAesKey(this.protectionAesKey, this.protectionAesKey, res.data.result)
+            if (this.requestData.plainText !== '') {
+              this.requestData.cryptedText = ''
+              this.$message({ message: '消息解密成功' })
+            } else {
+              this.$message({ message: '解密通讯明文：前端解密数据失败' })
             }
           } else {
             this.$message({ message: '错误信息: ' + res.data.result + ' | 错误码: ' + res.data.code })
@@ -781,7 +895,7 @@ export default {
   },
   created () {
     this.getServerRsaPubKey()
-    this.generateBrowserRsaKeyPair()
+    // this.generateBrowserRsaKeyPair()
   }
 }
 </script>
