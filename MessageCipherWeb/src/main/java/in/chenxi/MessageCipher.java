@@ -32,8 +32,8 @@ public class MessageCipher extends HttpServlet {
 	private final String CONF_ERROR_CODE = "5002";
 	private final boolean DEBUG = false;
 	
-	private final String GROUP_AES_KRY = ""; // modify this before you deploy it to the server
-	private final String STRICT_MODE_AUTH_PWD = ""; // modify this before you deploy it to the server
+	private final String GROUP_AES_KRY = "1234567890ABCDEF"; // modify this before you deploy it to the server
+	private final String STRICT_MODE_AUTH_PWD = "1234567890123456"; // modify this before you deploy it to the server
 	private final boolean STRICT_MODE = true; // 严格模式：服务器公钥是否加密。用于对抗中间人攻击， 如开：则返回加密过的服务器公钥
        
     /**
