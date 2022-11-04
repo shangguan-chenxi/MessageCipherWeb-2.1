@@ -57,8 +57,8 @@ public class frontEndCrypto {
     },
  */
     // modify these before you deploy it to the server
-	public static final String SERVER_RSA_PUBLIC_KEY = "";
-	public static final String SERVER_RSA_PRIVATE_KEY = "";
+	public static final String SERVER_RSA_PUBLIC_KEY = "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDycIM3JBa9JvVZX2VWwXYUV35ktTouzNA5W3sO6WpalOK/RjxwlU/YT+ptHS/NxHw+ax9rdrvfLzX3v2Ldkg1y/X+f0b5//yExnnJe4CP1bM3xsnf9YYQ8sHVGvoRyRFC9z6NgIZNahsEn52u/Nn4EN2oscZsCJkKElaIQbtEL8wIDAQAB";
+	public static final String SERVER_RSA_PRIVATE_KEY = "MIICdgIBADANBgkqhkiG9w0BAQEFAASCAmAwggJcAgEAAoGBAPJwgzckFr0m9VlfZVbBdhRXfmS1Oi7M0Dlbew7palqU4r9GPHCVT9hP6m0dL83EfD5rH2t2u98vNfe/Yt2SDXL9f5/Rvn//ITGecl7gI/VszfGyd/1hhDywdUa+hHJEUL3Po2Ahk1qGwSfna782fgQ3aixxmwImQoSVohBu0QvzAgMBAAECgYBh3jmaEN99DDUPFwt5si9QluFXFjGeot+Lx/otUty0JFZEkL3lVOEemWQxGA8sKZ1eNTBB2XSN7CkFEiV+/G6gq7kLo4SJUPn61uVY+IyqsOCkg+hRNFKNAYnZp3gobmvCAfJr+cknzj68iEjTejrWpGagL2z7k4rhdZkm9CLUgQJBAP2fSySEq5B6WuhKyAL9K69GtywgP13OHxGWjc4exkKFQlcqrzuRQ9x+N0Ql747C/0SxF+pO9gadLEThKcJTEUsCQQD0tmFAJr1jPYWnNmBPH8omssJWiHZJWG9T3ollRWRqQomBGUM+NSotuGyBeCtvi8ozO7Td3t42puwW5t24ZW75AkAp2WUOy417s5TYi65hP+E7dNG4yEFsexyJTGxtvIo+Y7rEo1hy3c9yzKjV5+SVi/uPHCG0Gf9irACoBPddB1PtAkBg2AyEptAshhxuoEZdCeemiPf/5uFpBWaJenhFa8DhjJN+U9EYvVGD5oiKdFQ8QMY0oFxjsd+fIVAtgBAe+YWBAkEAg2o3JM4eSTFHPZodyEGt+gtsaZge798QleODYzFCQ11MIlEHxrvWstWLjLFUhr8SdAD4zS24zl0EJhzDbR2Lbw==";
 	public static final String KEY_ALGORITHM = "RSA";
     public static final String SIGNATURE_ALGORITHM = "MD5withRSA";
 
